@@ -1,0 +1,128 @@
+<mujoco model="VerticalPulleyCableWeightAdhesion">
+
+    <!-- Optional: If you have scene.xml for ground or lighting, include it. -->
+    <include file="scene.xml"/>
+
+    <!-- If you need the cable plugin, keep it. Otherwise remove. -->
+    <extension>
+        <plugin plugin="mujoco.elasticity.cable"/>
+    </extension>
+
+    <!-- Basic simulation settings -->
+    <option timestep="0.02" gravity="0 0 -9.81"/>
+
+    <!-- =====================
+         DEFAULTS
+         ===================== -->
+    <!-- We define a default class for active adhesion geoms,
+         setting margin/gap so contact is recognized slightly "outside" the geometry. -->
+    <default>
+        <default class="active_adhesion">
+            <!-- margin + gap = 0.01 means contacts become active 1cm before surfaces actually meet -->
+            <geom margin="0.01" gap="0.01" />
+        </default>
+    </default>
+
+    <worldbody>
+
+        <!-- ================================
+             1) PULLEY + CABLE SYSTEM (unchanged)
+           ================================ -->
+        <body name="pulley_base" pos="-2 0 1.5">
+            <!-- Slide joints + hinge for the pulley -->
+            <joint name="pulley_slide_x" type="slide" axis="1 0 0"/>
+            <joint name="pulley_slide_y" type="slide" axis="0 1 0"/>
+            <joint name="pulley_slide_z" type="slide" axis="0 0 1"/>
+            <joint name="pulley_joint" type="hinge" axis="1 0 0" damping="100"/>
+
+            <!-- Pulley geometry -->
+            <geom name="pulley_geom" type="cylinder" size="0.1 0.1"
+                  euler="0 90 0" rgba="1 0.2 0.2 1"/>
+            
+            <!-- Put the side support disks-->
+            <geom name="pulley_support1" type="cylinder" size="0.15 0.005"
+                  pos="-0.11 0 0" euler="0 90 0" rgba="1 0.2 0.2 1"/>
+        
+            <geom name="pulley_support2" type="cylinder" size="0.15 0.005"
+                  pos="0.11 0 0" euler="0 90 0" rgba="1 0.2 0.2 1"/>
+
+            <!-- Cable composite -->
+            <body name="cable_start" pos="0 0 0">
+                <composite type="cable" curve="s" count="71 1 1" size="1"
+                           offset="0 -0.1 0" initial="none">
+                    <plugin plugin="mujoco.elasticity.cable">
+                        <config key="twist" value="10"/>
+                        <config key="bend"  value="100"/>
+                        <config key="vmax"  value="0.05"/>
+                    </plugin>
+                    <joint kind="main" damping="0.05"/>
+                    <geom type="capsule" size="0.005" rgba="0.8 0.6 0.2 1"/>
+                </composite>
+            </body>
+        </body>
+
+        <!-- =================
+             2) HANGING WEIGHT (Now Active Adhesion)
+           ================= -->
+        <!-- We apply 'childclass="active_adhesion"' so this body's geoms inherit
+             margin/gap for adhesive contact. -->
+        <body name="weight" pos="-1.0 0.0 1.5" childclass="active_adhesion">
+            <freejoint/>
+            <geom name="weight_geom" type="box"
+                  size="0.05 0.05 0.05"
+                  rgba="0.2 0.2 0.7 1"/>
+        </body>
+
+        <!-- =================
+             3) BIG BOX to Test Adhesion
+           ================= -->
+        <!-- A large static box that the 'weight' can stick to if adhesion is on. 
+             By default, geoms are dynamic. For a fixed box, set 'contype=0' or omit a joint.
+             If you want collisions, set friction, etc. -->
+        <body name="test_box" pos="-2.1 -0.2 1.3">
+            <!-- No joint => static body in the world. 
+                 Or you could remove 'contype="0" conaffinity="0"' if you want collisions. -->
+            <freejoint/>
+            <geom name="test_box_geom" type="box"
+                  size="0.1 0.1 0.01"
+                  rgba="0.6 0.6 0.6 1"
+                  contype="1" conaffinity="1"/>
+        </body>
+
+    </worldbody>
+
+    <!-- Connect cable's last segment to the weight -->
+    <equality>
+        <connect name="cable_weight_attach"
+                 body1="B_last" body2="weight"
+                 anchor="0 0 0"
+                 solref="1e-4 1"
+                 solimp="0.9 0.99 0.001"/>
+    </equality>
+
+    <!-- =====================
+         4) ACTUATORS
+       ===================== -->
+    <actuator>
+        <!-- Pulley rotation motor -->
+        <motor name="pulley_motor" joint="pulley_joint"
+               gear="1"
+               ctrllimited="true" ctrlrange="-200 200"
+               forcelimited="true" forcerange="-200 200"/>
+
+        <!-- Slide velocity actuators (x, y, z) -->
+        <velocity name="pulley_vel_x" joint="pulley_slide_x"
+                  kv="100" ctrllimited="true" ctrlrange="-1 1"/>
+        <velocity name="pulley_vel_y" joint="pulley_slide_y"
+                  kv="100" ctrllimited="true" ctrlrange="-1 1"/>
+        <velocity name="pulley_vel_z" joint="pulley_slide_z"
+                  kv="100" ctrllimited="true" ctrlrange="-10 10"/>
+
+        <!-- Adhesion actuator on the 'weight' body
+             ctrlrange="0 1" => 0 = no adhesion, 1 = max. 
+             gain="5" => set strength, tweak to your preference. -->
+        <adhesion name="adhere_weight" body="weight"
+                  ctrlrange="0 1" gain="1000"/>
+    </actuator>
+
+</mujoco>
