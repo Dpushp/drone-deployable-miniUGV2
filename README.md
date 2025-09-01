@@ -1,1 +1,1 @@
-# tether-pulley-sim
+#MiniUGV$_2$: A Compact UAV-Deployable Tracked Ground Vehicle with Manipulation Capabilities
